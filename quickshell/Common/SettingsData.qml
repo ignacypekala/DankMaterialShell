@@ -3476,13 +3476,11 @@ Singleton {
             SessionData.saveSettings();
         }
 
-        if (allLoaded()) {
-            Store.parse(root, getSettingsObject())
-            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-            _hasLoaded = true;
-            applyStoredTheme();
-            updateCompositorCursor();
-        }
+        Store.parse(root, getSettingsObject())
+        _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
+        _hasLoaded = allLoaded();
+        applyStoredTheme();
+        updateCompositorCursor();
     }
 
 
