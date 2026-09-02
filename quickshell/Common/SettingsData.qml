@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import QtCore
+import Qt.labs.folderlistmodel
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -1791,8 +1792,7 @@ Singleton {
         _pendingMigration = null;
 
         try {
-            const txt = settingsFile.text();
-            let obj = (txt && txt.trim()) ? JSON.parse(txt) : null;
+            let obj = getSettingsObject();
 
             const oldVersion = obj?.configVersion ?? 0;
             const legacyPins = oldVersion < 13 ? Store.extractPins(obj) : null;
@@ -3455,82 +3455,112 @@ Singleton {
         id: rightWidgetsModel
     }
 
-    property alias settingsFile: settingsFile
+    property var loadedSettings: ({})
+    function allLoaded() {
+        return Object.keys(loadedSettings).length >= settingsFolderModel.count;
+    }
+    function getSettingsObject() {
+        const settingsObject = {};
+        Object.assign(settingsObject, ...Object.values(loadedSettings));
+    }
+    function fileLoaded(fileName, obj) {
+        loadedSettings[fileName] = obj;
+        if (obj.weatherLocation !== undefined)
+        _legacyWeatherLocation = obj.weatherLocation;
+        if (obj.weatherCoordinates !== undefined)
+        _legacyWeatherCoordinates = obj.weatherCoordinates;
+        if (obj.vpnLastConnected !== undefined && obj.vpnLastConnected !== "") {
+            _legacyVpnLastConnected = obj.vpnLastConnected;
+            SessionData.vpnLastConnected = _legacyVpnLastConnected;
+            SessionData.saveSettings();
+        }
 
-    Timer {
-        id: settingsFileReloadDebounce
-        interval: 50
-        onTriggered: settingsFile.reload()
-        repeat: false
+        if (allLoaded()) {
+            Store.parse(root, obj)
+            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
+            _hasLoaded = true;
+            applyStoredTheme();
+            updateCompositorCursor();
+        }
     }
 
-    FileView {
-        id: settingsFile
 
-        path: isGreeterMode ? "" : StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/settings.json"
-        blockLoading: true
-        blockWrites: true
-        atomicWrites: true
-        watchChanges: !isGreeterMode
-        onFileChanged: {
-            if (_selfWrite) {
-                _selfWrite = false;
-                return;
-            }
-            settingsFileReloadDebounce.restart();
+    Repeater {
+        id: settingsLoader
+
+        model: FolderListModel {
+            id: settingsFolderModel
+            folder: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
+            showDirs: false
+            nameFilters: ["*.json"]
         }
-        onLoaded: {
-            if (isGreeterMode)
-                return;
-            const wasLoaded = _hasLoaded;
-            const prevFrameEnabled = frameEnabled;
-            const prevFrameMode = frameMode;
-            _loading = true;
-            _hasUnsavedChanges = false;
-            try {
-                const txt = settingsFile.text();
-                if (!txt || !txt.trim()) {
-                    _parseError = true;
+
+        delegate: Item {
+            id: settingsFileViewWrapper
+            required property string filePath
+            required property string fileName
+
+            Timer {
+                id: settingsFileReloadDebounce
+                interval: 50
+                onTriggered: settingsFile.reload()
+                repeat: false
+            }
+
+            FileView {
+                id: settingsFile
+
+                path: isGreeterMode ? "" : filePath
+                blockLoading: true
+                blockWrites: true
+                atomicWrites: true
+                watchChanges: !isGreeterMode
+                onFileChanged: {
+                    if (_selfWrite) {
+                        _selfWrite = false;
+                        return;
+                    }
+                    settingsFileReloadDebounce.restart();
+                }
+                onLoaded: {
+                    if (isGreeterMode)
                     return;
+                    const wasLoaded = _hasLoaded;
+                    const prevFrameEnabled = frameEnabled;
+                    const prevFrameMode = frameMode;
+                    _loading = true;
+                    _hasUnsavedChanges = false;
+                    try {
+                        const txt = settingsFile.text();
+                        if (!txt || !txt.trim()) {
+                            _parseError = true;
+                            return;
+                        }
+                        const obj = JSON.parse(txt);
+                        _parseError = false;
+                        fileLoaded(fileName, obj);
+                    } catch (e) {
+                        _parseError = true;
+                        const msg = e.message;
+                        log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
+                        Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
+                    } finally {
+                        _loading = false;
+                    }
+                    // External edits reload under _loading, which skips the per-property transition triggers
+                    if (wasLoaded && !_parseError && (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode)))
+                    updateFrameCompositorLayout();
                 }
-                const obj = JSON.parse(txt);
-                _parseError = false;
-                Store.parse(root, obj);
-
-                if (obj.weatherLocation !== undefined)
-                    _legacyWeatherLocation = obj.weatherLocation;
-                if (obj.weatherCoordinates !== undefined)
-                    _legacyWeatherCoordinates = obj.weatherCoordinates;
-                if (obj.vpnLastConnected !== undefined && obj.vpnLastConnected !== "") {
-                    _legacyVpnLastConnected = obj.vpnLastConnected;
-                    SessionData.vpnLastConnected = _legacyVpnLastConnected;
-                    SessionData.saveSettings();
+                onLoadFailed: error => {
+                    if (isGreeterMode)
+                    return;
+                    applyStoredTheme();
                 }
-
-                _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-                _hasLoaded = true;
-                applyStoredTheme();
-                updateCompositorCursor();
-            } catch (e) {
-                _parseError = true;
-                const msg = e.message;
-                log.error("Failed to reload settings.json - file will not be overwritten. Error:", msg);
-                Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg("settings.json"), msg));
-            } finally {
-                _loading = false;
+                onSaveFailed: error => {
+                    root._isReadOnly = true;
+                    root._hasUnsavedChanges = root._checkForUnsavedChanges();
+                }
             }
-            // External edits reload under _loading, which skips the per-property transition triggers
-            if (wasLoaded && !_parseError && (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode)))
-                updateFrameCompositorLayout();
-        }
-        onLoadFailed: error => {
-            if (isGreeterMode)
-                return;
-            applyStoredTheme();
-        }
-        onSaveFailed: error => {
-            root._isReadOnly = true;
-            root._hasUnsavedChanges = root._checkForUnsavedChanges();
         }
     }
 
