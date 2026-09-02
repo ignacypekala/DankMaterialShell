@@ -3462,6 +3462,7 @@ Singleton {
     function getSettingsObject() {
         const settingsObject = {};
         Object.assign(settingsObject, ...Object.values(loadedSettings));
+        return settingsObject;
     }
     function fileLoaded(fileName, obj) {
         loadedSettings[fileName] = obj;
@@ -3476,7 +3477,7 @@ Singleton {
         }
 
         if (allLoaded()) {
-            Store.parse(root, obj)
+            Store.parse(root, getSettingsObject())
             _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
             _hasLoaded = true;
             applyStoredTheme();
