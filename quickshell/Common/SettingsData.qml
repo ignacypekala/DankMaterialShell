@@ -1995,10 +1995,41 @@ Singleton {
     }
 
     function saveSettings() {
-        if (_loading || _parseError || !_hasLoaded)
+        try {
+            if (_loading || _parseError || !_hasLoaded)
             return;
-        _selfWrite = true;
-        settingsFile.setText(JSON.stringify(Store.toJson(root), null, 2));
+            _selfWrite = true;
+            const settings = Store.toJson(root);
+            const loadedFiles = Object.keys(loadedSettings);
+
+            // Reverse order ensures only the effective value will get overwritten.
+            loadedFiles.reverse()
+            for (const file of loadedFiles) {
+                const settingsToSave = {};
+                for (const setting of Object.keys(loadedSettings[file] || {})) {
+                    if (settings[setting] === undefined) continue;
+                    settingsToSave[setting] = settings[setting];
+                    settings[setting] = undefined;
+                }
+            }
+
+            const leftoverSettings = {};
+            const leftovers = false;
+            for (let setting in Object.keys(settings)) {
+                if (settings[setting] !== undefined) {
+                    leftoverSettings[setting] = settings[setting];
+                    leftovers = true;
+                }
+            }
+
+            if (leftovers) {
+                fileViews["default.json"].setText(JSON.stringify(settingsToSave, null, 2));
+            }
+
+        } catch (e) {
+            log.error(`Failed to save settings at ${e.lineNumber}`, e)
+        }
+
         if (_isReadOnly)
             _checkSettingsWritable();
     }
@@ -3456,6 +3487,7 @@ Singleton {
     }
 
     property var loadedSettings: ({})
+    property var fileViews: ({})
     function allLoaded() {
         return Object.keys(loadedSettings).length >= settingsFolderModel.count;
     }
@@ -3538,6 +3570,7 @@ Singleton {
                         const obj = JSON.parse(txt);
                         _parseError = false;
                         fileLoaded(fileName, obj);
+                        fileViews[fileName] = settingsFile;
                     } catch (e) {
                         _parseError = true;
                         const msg = e.message;
