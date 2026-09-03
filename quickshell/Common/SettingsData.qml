@@ -3486,37 +3486,92 @@ Singleton {
         id: rightWidgetsModel
     }
 
-    property var loadedSettings: ({})
-    property var fileViews: ({})
-    function allLoaded() {
-        return Object.keys(loadedSettings).length >= settingsFolderModel.count;
-    }
-    function getSettingsObject() {
-        const settingsObject = {};
-        Object.assign(settingsObject, ...Object.values(loadedSettings));
-        return settingsObject;
-    }
-    function fileLoaded(fileName, obj) {
-        loadedSettings[fileName] = obj;
-        if (obj.weatherLocation !== undefined)
-        _legacyWeatherLocation = obj.weatherLocation;
-        if (obj.weatherCoordinates !== undefined)
-        _legacyWeatherCoordinates = obj.weatherCoordinates;
-        if (obj.vpnLastConnected !== undefined && obj.vpnLastConnected !== "") {
-            _legacyVpnLastConnected = obj.vpnLastConnected;
-            SessionData.vpnLastConnected = _legacyVpnLastConnected;
-            SessionData.saveSettings();
+    component SettingsFile : QtObject {
+        id: settingsFile
+
+        required property string filePath
+        property var settings: ({})
+        property bool isLoading: true
+        property bool hasLoaded: false
+        property bool hasParseFailed: false
+        property bool isReadOnly: false
+        signal loading()
+        signal loaded()
+        signal parseError()
+        signal saveFailed(error: FileViewError)
+        signal loadFailed(error: FileViewError)
+
+        property Timer timer: Timer {
+            id: settingsFileReloadDebounce
+            interval: 50
+            onTriggered: settingsFileView.reload()
+            repeat: false
         }
 
-        Store.parse(root, getSettingsObject())
-        _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-        _hasLoaded = allLoaded();
-        applyStoredTheme();
-        updateCompositorCursor();
+        property FileView fileView: FileView {
+            id: settingsFileView
+
+            path: isGreeterMode ? "" : filePath
+            blockLoading: true
+            blockWrites: true
+            atomicWrites: true
+            watchChanges: !isGreeterMode
+            onFileChanged: {
+                if (_selfWrite) {
+                    _selfWrite = false;
+                    return;
+                }
+                settingsFileReloadDebounce.restart();
+            }
+            onLoaded: {
+                if (isGreeterMode) {
+                    return;
+                }
+                isLoading = true;
+                isReadOnly = false;
+                settingsFile.loading();
+                try {
+                    const txt = settingsFileView.text();
+                    if (!txt || !txt.trim()) {
+                        hasParseFailed = true;
+                        settingsFile.parseError();
+                        return;
+                    }
+                    settingsFile.settings = JSON.parse(txt);
+
+                    isLoading = false;
+                    hasLoaded = true;
+                    settingsFile.loaded();
+                } catch (error) {
+                    hasParseFailed = true;
+                    settingsFile.parseError();
+                    const msg = error.msg;
+                    Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
+                } finally {
+                    hasParseFailed = false;
+                }
+            }
+            onLoadFailed: settingsFile.loadFailed
+            onSaveFailed: (error) => {
+                isReadOnly = true;
+                settingsFile.readFailed(error);
+            }
+        }
     }
 
+    property var settingFiles: ({})
+    function getSettingsObject() {
+        const settingsObject = {};
+        for (const index in settingFiles) {
+            const settingFile = settingFiles[index];
+            if (settingFile.hasLoaded) {
+                Object.assign(settingsObject, settingFile.settings);
+            }
+        }
+        return settingsObject;
+    }
 
-    Repeater {
+    Instantiator {
         id: settingsLoader
 
         model: FolderListModel {
@@ -3526,72 +3581,71 @@ Singleton {
             nameFilters: ["*.json"]
         }
 
-        delegate: Item {
-            id: settingsFileViewWrapper
-            required property string filePath
-            required property string fileName
+        onObjectAdded: (index, file) => {
+            settingFiles[index + 1] = file;
+        }
 
-            Timer {
-                id: settingsFileReloadDebounce
-                interval: 50
-                onTriggered: settingsFile.reload()
-                repeat: false
+        onObjectRemoved: (index, file) => {
+            delete settingFiles[index + 1]
+        }
+
+        delegate: SettingsFile {
+            id: settingsFile
+
+            onLoading: {
+                _loading = true;
             }
-
-            FileView {
-                id: settingsFile
-
-                path: isGreeterMode ? "" : filePath
-                blockLoading: true
-                blockWrites: true
-                atomicWrites: true
-                watchChanges: !isGreeterMode
-                onFileChanged: {
-                    if (_selfWrite) {
-                        _selfWrite = false;
-                        return;
-                    }
-                    settingsFileReloadDebounce.restart();
+            onLoaded: {
+                _loading = Object.values(settingFiles).every(file => file.isLoaded && !file.loading);
+                if (_parseError) {
+                    _parseError = Object.values(settingFiles).some(file => file.hasParseFailed);
                 }
-                onLoaded: {
-                    if (isGreeterMode)
-                    return;
-                    const wasLoaded = _hasLoaded;
-                    const prevFrameEnabled = frameEnabled;
-                    const prevFrameMode = frameMode;
-                    _loading = true;
-                    _hasUnsavedChanges = false;
-                    try {
-                        const txt = settingsFile.text();
-                        if (!txt || !txt.trim()) {
-                            _parseError = true;
-                            return;
-                        }
-                        const obj = JSON.parse(txt);
-                        _parseError = false;
-                        fileLoaded(fileName, obj);
-                        fileViews[fileName] = settingsFile;
-                    } catch (e) {
-                        _parseError = true;
-                        const msg = e.message;
-                        log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
-                        Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
-                    } finally {
-                        _loading = false;
-                    }
+
+                const prevFrameEnabled = frameEnabled;
+                const prevFrameMode = frameMode;
+
+                const loadedSettings = settingsFile.settings;
+
+                if (loadedSettings.weatherLocation !== undefined) {
+                    _legacyWeatherLocation = loadedSettings.weatherLocation;
+                }
+                if (loadedSettings.weatherCoordinates !== undefined) {
+                    _legacyWeatherCoordinates = loadedSettings.weatherCoordinates;
+                }
+                if (loadedSettings.vpnLastConnected !== undefined && loadedSettings.vpnLastConnected !== "") {
+                    _legacyVpnLastConnected = loadedSettings.vpnLastConnected;
+                    SessionData.vpnLastConnected = _legacyVpnLastConnected;
+                    SessionData.saveSettings();
+                }
+
+                Store.parse(root, getSettingsObject())
+
+                _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
+                applyStoredTheme();
+                updateCompositorCursor();
+
+                if (_hasLoaded) {
                     // External edits reload under _loading, which skips the per-property transition triggers
-                    if (wasLoaded && !_parseError && (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode)))
-                    updateFrameCompositorLayout();
+                    const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
+                    if (!_parseError && frameChanged) {
+                        updateFrameCompositorLayout();
+                    }
+                } else {
+                    _hasLoaded = Object.values(settingFiles).every(file => file.hasLoaded);
                 }
-                onLoadFailed: error => {
-                    if (isGreeterMode)
+            }
+            onParseError: {
+                _parseError = true;
+            }
+            onLoadFailed: error => {
+                if (isGreeterMode) {
                     return;
-                    applyStoredTheme();
                 }
-                onSaveFailed: error => {
-                    root._isReadOnly = true;
-                    root._hasUnsavedChanges = root._checkForUnsavedChanges();
-                }
+                applyStoredTheme();
+            }
+            onSaveFailed: error => {
+                root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
+                root._hasUnsavedChanges = root._checkForUnsavedChanges();
             }
         }
     }
