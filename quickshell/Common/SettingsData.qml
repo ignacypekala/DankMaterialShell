@@ -1994,36 +1994,40 @@ Singleton {
         }
     }
 
+    function _getSettingsSplitByFile() {
+        const settings = Store.toJson(root);
+        const splitSettings = {};
+
+        const fileIndicies = Object.keys(settingFiles);
+        // Reverse order ensures only the effective value gets overwritten.
+        fileIndicies.reverse();
+        for (const index of fileIndicies) {
+            const file = settingFiles[index];
+            const fileSettings = {};
+            for (const setting of Object.keys(file.settings)) {
+                if (!(setting in settings)) continue;
+                fileSettings[setting] = settings[setting];
+                delete settings[setting];
+            }
+            splitSettings[index] = fileSettings;
+        }
+
+        for (const setting of settings) {
+            splitSettings[0][setting] = settings[setting];
+        }
+        return splitSettings;
+    }
+
     function saveSettings() {
         try {
             if (_loading || _parseError || !_hasLoaded)
             return;
             _selfWrite = true;
-            const settings = Store.toJson(root);
-            const loadedFiles = Object.keys(loadedSettings);
-
-            // Reverse order ensures only the effective value will get overwritten.
-            loadedFiles.reverse()
-            for (const file of loadedFiles) {
-                const settingsToSave = {};
-                for (const setting of Object.keys(loadedSettings[file] || {})) {
-                    if (settings[setting] === undefined) continue;
-                    settingsToSave[setting] = settings[setting];
-                    settings[setting] = undefined;
-                }
-            }
-
-            const leftoverSettings = {};
-            const leftovers = false;
-            for (let setting in Object.keys(settings)) {
-                if (settings[setting] !== undefined) {
-                    leftoverSettings[setting] = settings[setting];
-                    leftovers = true;
-                }
-            }
-
-            if (leftovers) {
-                fileViews["default.json"].setText(JSON.stringify(settingsToSave, null, 2));
+            const splitSettings = _getSettingsSplitByFile();
+            for (const index in splitSettings) {
+                const fileSettings = splitSettings[index];
+                const file = settingFiles[index];
+                file.setSettings(fileSettings);
             }
 
         } catch (e) {
@@ -3500,6 +3504,9 @@ Singleton {
         signal parseError()
         signal saveFailed(error: FileViewError)
         signal loadFailed(error: FileViewError)
+        function setSettings(settings) {
+            settingsFileView.setText(JSON.stringify(settings, null, 2));
+        }
 
         property Timer timer: Timer {
             id: settingsFileReloadDebounce
