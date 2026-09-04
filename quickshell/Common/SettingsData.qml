@@ -3596,9 +3596,10 @@ Singleton {
                 _loading = true;
             }
             onLoaded: {
-                _loading = Object.values(settingFiles).every(file => file.isLoaded && !file.loading);
+                const filesArray = Object.values(settingFiles);
+                _loading = filesArray.every(file => file.isLoaded && !file.loading);
                 if (_parseError) {
-                    _parseError = Object.values(settingFiles).some(file => file.hasParseFailed);
+                    _parseError = filesArray.some(file => file.hasParseFailed);
                 }
 
                 const prevFrameEnabled = frameEnabled;
