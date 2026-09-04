@@ -3554,7 +3554,7 @@ Singleton {
             onLoadFailed: settingsFile.loadFailed
             onSaveFailed: (error) => {
                 isReadOnly = true;
-                settingsFile.readFailed(error);
+                settingsFile.saveFailed(error);
             }
         }
     }
