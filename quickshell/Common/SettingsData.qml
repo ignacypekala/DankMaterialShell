@@ -89,7 +89,6 @@ Singleton {
     property bool _pluginParseError: false
     property bool _hasLoaded: false
     property bool _isReadOnly: false
-    property bool _hasUnsavedChanges: false
     property bool _selfWrite: false
     property var _loadedSettingsSnapshot: null
     property var pluginSettings: ({})
@@ -1788,7 +1787,6 @@ Singleton {
     function loadSettings() {
         _loading = true;
         _parseError = false;
-        _hasUnsavedChanges = false;
         _pendingMigration = null;
 
         try {
@@ -1908,12 +1906,10 @@ Singleton {
         const wasReadOnly = _isReadOnly;
         _isReadOnly = !writable;
         if (_isReadOnly) {
-            _hasUnsavedChanges = _checkForUnsavedChanges();
             if (!wasReadOnly)
                 log.info("settings.json is now read-only");
         } else {
             _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-            _hasUnsavedChanges = false;
             if (wasReadOnly)
                 log.info("settings.json is now writable");
             if (_pendingMigration)
@@ -3533,7 +3529,6 @@ Singleton {
 
     function _registerSaveFailure() {
         root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
-        root._hasUnsavedChanges = root._checkForUnsavedChanges();
     }
 
     function _mitigateLoadFailure() {
