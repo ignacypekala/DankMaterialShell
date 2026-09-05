@@ -3531,7 +3531,7 @@ Singleton {
         }
     }
 
-    function _diagnoseSaveFailure() {
+    function _registerSaveFailure() {
         root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
         root._hasUnsavedChanges = root._checkForUnsavedChanges();
     }
@@ -3613,7 +3613,7 @@ Singleton {
             }
             onSaveFailed: (error) => {
                 isReadOnly = true;
-                _diagnoseSaveFailure();
+                _registerSaveFailure();
             }
         }
     }
