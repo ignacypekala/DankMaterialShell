@@ -3499,11 +3499,6 @@ Singleton {
         property bool hasLoaded: false
         property bool hasParseFailed: false
         property bool isReadOnly: false
-        signal loading()
-        signal loaded()
-        signal parseError()
-        signal saveFailed(error: FileViewError)
-        signal loadFailed(error: FileViewError)
         function setSettings(settings) {
             settingsFileView.setText(JSON.stringify(settings, null, 2));
         }
@@ -3535,8 +3530,8 @@ Singleton {
                     return;
                 }
                 isLoading = true;
+                _loading = true;
                 isReadOnly = false;
-                settingsFile.loading();
                 try {
                     const txt = settingsFileView.text();
                     if (!txt || !txt.trim()) {
@@ -3545,23 +3540,24 @@ Singleton {
                         return;
                     }
                     settingsFile.settings = JSON.parse(txt);
-
                     isLoading = false;
                     hasLoaded = true;
-                    settingsFile.loaded();
+                    _udpateSettingsAfterReload(settingsFile);
                 } catch (error) {
                     hasParseFailed = true;
-                    settingsFile.parseError();
+                    _parseError = true;
                     const msg = error.msg;
                     Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
                     hasParseFailed = false;
                 }
             }
-            onLoadFailed: settingsFile.loadFailed
+            onLoadFailed: {
+                _mitigateLoadFailure();
+            }
             onSaveFailed: (error) => {
                 isReadOnly = true;
-                settingsFile.saveFailed(error);
+                _diagnoseSaveFailure();
             }
         }
     }
@@ -3630,32 +3626,17 @@ Singleton {
         root._hasUnsavedChanges = root._checkForUnsavedChanges();
     }
 
+    function _mitigateLoadFailure() {
+        if (isGreeterMode) {
+            return;
+        }
+        applyStoredTheme();
+    }
+
     SettingsFile {
         id: defaultSettingsFile
 
         filePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/settings.json"
-        onLoading: {
-            _loading = true;
-        }
-        onLoaded: {
-            try {
-                _udpateSettingsAfterReload(defaultSettingsFile);
-            } catch (e) {
-                log.error(e);
-            }
-        }
-        onParseError: {
-            _parseError = true;
-        }
-        onLoadFailed: error => {
-            if (isGreeterMode) {
-                return;
-            }
-            applyStoredTheme();
-        }
-        onSaveFailed: error => {
-            _diagnoseSaveFailure();
-        }
 
         Component.onCompleted: {
             settingFiles[0] = defaultSettingsFile;
@@ -3682,29 +3663,6 @@ Singleton {
 
         delegate: SettingsFile {
             id: settingsFile
-
-            onLoading: {
-                _loading = true;
-            }
-            onLoaded: {
-                try {
-                    _udpateSettingsAfterReload(settingsFile);
-                } catch (e) {
-                    log.error(e);
-                }
-            }
-            onParseError: {
-                _parseError = true;
-            }
-            onLoadFailed: error => {
-                if (isGreeterMode) {
-                    return;
-                }
-                applyStoredTheme();
-            }
-            onSaveFailed: error => {
-                _diagnoseSaveFailure();
-            }
         }
     }
 
