@@ -3490,6 +3490,66 @@ Singleton {
         id: rightWidgetsModel
     }
 
+    function _udpateSettingsAfterReload(file) {
+        try {
+            const filesArray = Object.values(settingFiles);
+            _loading = filesArray.every(file => file.isLoaded && !file.loading);
+            if (_parseError) {
+                _parseError = filesArray.some(file => file.hasParseFailed);
+            }
+
+            const prevFrameEnabled = frameEnabled;
+            const prevFrameMode = frameMode;
+
+            const loadedSettings = file.settings;
+
+            if (loadedSettings.weatherLocation !== undefined) {
+                _legacyWeatherLocation = loadedSettings.weatherLocation;
+            }
+            if (loadedSettings.weatherCoordinates !== undefined) {
+                _legacyWeatherCoordinates = loadedSettings.weatherCoordinates;
+            }
+            if (loadedSettings.vpnLastConnected !== undefined && loadedSettings.vpnLastConnected !== "") {
+                _legacyVpnLastConnected = loadedSettings.vpnLastConnected;
+                SessionData.vpnLastConnected = _legacyVpnLastConnected;
+                SessionData.saveSettings();
+            }
+
+            Store.parse(root, getSettingsObject())
+
+            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
+            applyStoredTheme();
+            updateCompositorCursor();
+
+            if (_hasLoaded) {
+                // External edits reload under _loading, which skips the per-property transition triggers
+                const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
+                if (!_parseError && frameChanged) {
+                    updateFrameCompositorLayout();
+                }
+            } else {
+                _hasLoaded = Object.values(settingFiles).every(file => file.hasLoaded);
+            }
+        } catch (error) {
+            const msg = error.message;
+            log.error(`Failed to reload ${file.filePath} - file will not be overwritten. Error:`, msg);
+            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg("settings.json"), msg));
+        }
+    }
+
+    function _diagnoseSaveFailure() {
+        root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
+        root._hasUnsavedChanges = root._checkForUnsavedChanges();
+    }
+
+    function _mitigateLoadFailure() {
+        if (isGreeterMode) {
+            return;
+        }
+        applyStoredTheme();
+    }
+
+
     component SettingsFile : QtObject {
         id: settingsFile
 
@@ -3572,65 +3632,6 @@ Singleton {
             }
         }
         return settingsObject;
-    }
-
-    function _udpateSettingsAfterReload(file) {
-        try {
-            const filesArray = Object.values(settingFiles);
-            _loading = filesArray.every(file => file.isLoaded && !file.loading);
-            if (_parseError) {
-                _parseError = filesArray.some(file => file.hasParseFailed);
-            }
-
-            const prevFrameEnabled = frameEnabled;
-            const prevFrameMode = frameMode;
-
-            const loadedSettings = file.settings;
-
-            if (loadedSettings.weatherLocation !== undefined) {
-                _legacyWeatherLocation = loadedSettings.weatherLocation;
-            }
-            if (loadedSettings.weatherCoordinates !== undefined) {
-                _legacyWeatherCoordinates = loadedSettings.weatherCoordinates;
-            }
-            if (loadedSettings.vpnLastConnected !== undefined && loadedSettings.vpnLastConnected !== "") {
-                _legacyVpnLastConnected = loadedSettings.vpnLastConnected;
-                SessionData.vpnLastConnected = _legacyVpnLastConnected;
-                SessionData.saveSettings();
-            }
-
-            Store.parse(root, getSettingsObject())
-
-            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-            applyStoredTheme();
-            updateCompositorCursor();
-
-            if (_hasLoaded) {
-                // External edits reload under _loading, which skips the per-property transition triggers
-                const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
-                if (!_parseError && frameChanged) {
-                    updateFrameCompositorLayout();
-                }
-            } else {
-                _hasLoaded = Object.values(settingFiles).every(file => file.hasLoaded);
-            }
-        } catch (error) {
-            const msg = error.message;
-            log.error(`Failed to reload ${file.filePath} - file will not be overwritten. Error:`, msg);
-            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg("settings.json"), msg));
-        }
-    }
-
-    function _diagnoseSaveFailure() {
-        root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
-        root._hasUnsavedChanges = root._checkForUnsavedChanges();
-    }
-
-    function _mitigateLoadFailure() {
-        if (isGreeterMode) {
-            return;
-        }
-        applyStoredTheme();
     }
 
     SettingsFile {
