@@ -3649,15 +3649,12 @@ Singleton {
             showDirs: false
             nameFilters: ["*.json"]
         }
-
         onObjectAdded: (index, file) => {
             settingFiles[index + 1] = file;
         }
-
         onObjectRemoved: (index, file) => {
             delete settingFiles[index + 1]
         }
-
         delegate: SettingsFile {
             id: settingsFile
         }
