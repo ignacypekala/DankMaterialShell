@@ -2012,7 +2012,7 @@ Singleton {
             splitSettings[index] = fileSettings;
         }
 
-        for (const setting of settings) {
+        for (const setting in settings) {
             splitSettings[0][setting] = settings[setting];
         }
         return splitSettings;
