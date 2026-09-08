@@ -89,7 +89,6 @@ Singleton {
     property bool _pluginParseError: false
     property bool _hasLoaded: false
     property bool _isReadOnly: false
-    property bool _selfWrite: false
     property var _loadedSettingsSnapshot: null
     property var pluginSettings: ({})
     property var builtInPluginSettings: ({})
@@ -3541,7 +3540,9 @@ Singleton {
         property bool hasLoaded: false
         property bool hasParseFailed: false
         property bool isReadOnly: false
+        property bool selfWrite: false
         function setSettings(settings) {
+            selfWrite = true;
             settingsFileView.setText(JSON.stringify(settings, null, 2));
         }
 
@@ -3561,11 +3562,11 @@ Singleton {
             atomicWrites: true
             watchChanges: !isGreeterMode
             onFileChanged: {
-                if (_selfWrite) {
-                    _selfWrite = false;
-                    return;
+                if (selfWrite) {
+                    selfWrite = false;
+                } else {
+                    settingsFileReloadDebounce.restart();
                 }
-                settingsFileReloadDebounce.restart();
             }
             onLoaded: {
                 if (isGreeterMode) {
