@@ -88,6 +88,7 @@ Singleton {
     property bool _parseError: false
     property bool _pluginParseError: false
     property bool _hasLoaded: false
+    property bool _allSettingsFilesLoaded: false
     property bool _isReadOnly: false
     property var _loadedSettingsSnapshot: null
     property var pluginSettings: ({})
@@ -1496,7 +1497,7 @@ Singleton {
         if (isGreeterMode)
             return;
         Processes.settingsRoot = root;
-        loadSettings();
+        _loadSettings();
         initializeListModels();
         refreshAuthAvailability();
         Processes.checkPluginSettings();
@@ -1783,50 +1784,59 @@ Singleton {
         updateBarConfigs();
     }
 
-    function loadSettings() {
-        _loading = true;
-        _parseError = false;
+    function _loadSettings() {
+        const isInitial = _hasLoaded;
+        if (_loading || !_allSettingsFilesLoaded || _parseError) {
+            return;
+        }
 
         try {
             let obj = getSettingsObject();
 
-            const oldVersion = obj?.configVersion ?? 0;
-            const legacyPins = oldVersion < 13 ? Store.extractPins(obj) : null;
-            const sessionPayload = oldVersion < 15 ? Store.extractSessionPayload(obj) : null;
-            const cachePayload = oldVersion < 15 ? Store.extractCachePayload(obj) : null;
-            if (oldVersion < settingsConfigVersion) {
-                const migrated = Store.migrateToVersion(obj, settingsConfigVersion);
-                if (migrated) {
-                    obj = migrated;
-                }
-            }
-            if (legacyPins)
-                Qt.callLater(() => CacheData.migratePins(legacyPins));
-            if (cachePayload)
-                Qt.callLater(() => CacheData.migrateUsageHistories(cachePayload));
-            if (sessionPayload) {
-                Qt.callLater(() => {
-                    SessionData.importFromSettings(sessionPayload);
-                    _mergeSessionState();
-                });
-            }
-
-            if (obj?.lockScreenActiveMonitor !== undefined) {
-                var oldVal = obj.lockScreenActiveMonitor;
-                if (oldVal && oldVal !== "all") {
-                    if (!obj.screenPreferences)
-                        obj.screenPreferences = {};
-                    if (obj.screenPreferences.lockScreen === undefined) {
-                        obj.screenPreferences.lockScreen = [oldVal];
+            if (isInitial) {
+                const oldVersion = obj?.configVersion ?? 0;
+                const legacyPins = oldVersion < 13 ? Store.extractPins(obj) : null;
+                const sessionPayload = oldVersion < 15 ? Store.extractSessionPayload(obj) : null;
+                const cachePayload = oldVersion < 15 ? Store.extractCachePayload(obj) : null;
+                if (oldVersion < settingsConfigVersion) {
+                    const migrated = Store.migrateToVersion(obj, settingsConfigVersion);
+                    if (migrated) {
+                        obj = migrated;
                     }
                 }
-                delete obj.lockScreenActiveMonitor;
+
+                if (legacyPins) {
+                    Qt.callLater(() => CacheData.migratePins(legacyPins));
+                }
+                if (cachePayload) {
+                    Qt.callLater(() => CacheData.migrateUsageHistories(cachePayload));
+                } if (sessionPayload) {
+                    Qt.callLater(() => {
+                        SessionData.importFromSettings(sessionPayload);
+                        _mergeSessionState();
+                    });
+                }
+
+                if (obj?.lockScreenActiveMonitor !== undefined) {
+                    var oldVal = obj.lockScreenActiveMonitor;
+                    if (oldVal && oldVal !== "all") {
+                        if (!obj.screenPreferences)
+                        obj.screenPreferences = {};
+                        if (obj.screenPreferences.lockScreen === undefined) {
+                            obj.screenPreferences.lockScreen = [oldVal];
+                        }
+                    }
+                    delete obj.lockScreenActiveMonitor;
+                }
+
+                if (obj?.use24HourClock !== undefined && obj?.clockFormat === undefined) {
+                    obj.clockFormat = obj.use24HourClock ? "24h" : "12h";
+                    delete obj.use24HourClock;
+                }
             }
 
-            if (obj?.use24HourClock !== undefined && obj?.clockFormat === undefined) {
-                obj.clockFormat = obj.use24HourClock ? "24h" : "12h";
-                delete obj.use24HourClock;
-            }
+            const prevFrameEnabled = frameEnabled;
+            const prevFrameMode = frameMode;
 
             Store.parse(root, obj);
 
@@ -1842,33 +1852,42 @@ Singleton {
 
             if (obj?.weatherLocation !== undefined)
                 _legacyWeatherLocation = obj.weatherLocation;
-            if (obj?.weatherCoordinates !== undefined)
-                _legacyWeatherCoordinates = obj.weatherCoordinates;
-            if (obj?.vpnLastConnected !== undefined && obj.vpnLastConnected !== "") {
+
+            if (obj.vpnLastConnected !== undefined && obj.vpnLastConnected !== "") {
                 _legacyVpnLastConnected = obj.vpnLastConnected;
                 SessionData.vpnLastConnected = _legacyVpnLastConnected;
                 SessionData.saveSettings();
             }
 
-            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
             _hasLoaded = true;
-            _mergeSessionState();
+            if (isInitial) {
+                _mergeSessionState();
+                Qt.callLater(checkIconThemeDrift);
+                _checkSettingsWritable();
+            }
             applyStoredTheme();
             updateCompositorCursor();
-            Qt.callLater(checkIconThemeDrift);
+            if (isInitial) {
+                // External edits reload under _loading, which skips the per-property transition triggers
+                const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
+                if (!_parseError && frameChanged) {
+                    updateFrameCompositorLayout();
+                }
+            }
 
-            _checkSettingsWritable();
         } catch (e) {
-            _parseError = true;
             const msg = e.message;
-            log.error("Failed to parse settings.json - file will not be overwritten. Error:", msg);
-            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg("settings.json"), msg));
+            log.error("Failed to apply settings. Error:", msg);
+            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to apply settings"), msg));
             applyStoredTheme();
         } finally {
             _loading = false;
         }
-        loadPluginSettings();
-        Qt.callLater(() => _reconcileConnectedFrameBarStyles());
+
+        if (isInitial) {
+            loadPluginSettings();
+            Qt.callLater(() => _reconcileConnectedFrameBarStyles());
+        }
     }
 
     function _mergeSessionState() {
@@ -3478,47 +3497,6 @@ Singleton {
         id: rightWidgetsModel
     }
 
-    function _udpateSettingsAfterReload(file) {
-        const filesArray = Object.values(settingFiles);
-        _loading = !filesArray.every(file => file.hasLoaded && !file.loading);
-        if (_parseError) {
-            _parseError = filesArray.some(file => file.hasParseFailed);
-        }
-
-        const prevFrameEnabled = frameEnabled;
-        const prevFrameMode = frameMode;
-
-        const loadedSettings = file.settings;
-
-        if (loadedSettings.weatherLocation !== undefined) {
-            _legacyWeatherLocation = loadedSettings.weatherLocation;
-        }
-        if (loadedSettings.weatherCoordinates !== undefined) {
-            _legacyWeatherCoordinates = loadedSettings.weatherCoordinates;
-        }
-        if (loadedSettings.vpnLastConnected !== undefined && loadedSettings.vpnLastConnected !== "") {
-            _legacyVpnLastConnected = loadedSettings.vpnLastConnected;
-            SessionData.vpnLastConnected = _legacyVpnLastConnected;
-            SessionData.saveSettings();
-        }
-
-        Store.parse(root, getSettingsObject())
-
-        _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-        applyStoredTheme();
-        updateCompositorCursor();
-
-        if (_hasLoaded) {
-            // External edits reload under _loading, which skips the per-property transition triggers
-            const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
-            if (!_parseError && frameChanged) {
-                updateFrameCompositorLayout();
-            }
-        } else {
-            _hasLoaded = Object.values(settingFiles).every(file => file.hasLoaded);
-        }
-    }
-
     function _registerSaveFailure() {
         root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
     }
@@ -3580,7 +3558,6 @@ Singleton {
                 }
                 isLoading = true;
                 _loading = true;
-                isReadOnly = false;
                 try {
                     const txt = settingsFileView.text();
                     if (!txt || !txt.trim()) {
@@ -3588,18 +3565,25 @@ Singleton {
                         return;
                     }
                     settingsFile.settings = JSON.parse(txt);
-                    isLoading = false;
                     hasLoaded = true;
-                    _udpateSettingsAfterReload(settingsFile);
                 } catch (error) {
-                        hasParseFailed = true;
-                        _parseError = true;
-                        const msg = error.message;
-                        const fileName = filePath?.split("/").pop();
-                        log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
-                        Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
+                    hasParseFailed = true;
+                    _parseError = true;
+                    const msg = error.message;
+                    const fileName = filePath?.split("/").pop();
+                    log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
+                    Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
+                    isLoading = false;
+                    const filesArray = Object.values(settingFiles);
+                    _loading = filesArray.some(file => file.loading);
+                    _allSettingsFilesLoaded = filesArray.every(file => file.hasLoaded)
+
                     hasParseFailed = false;
+                    if (_parseError) {
+                        _parseError = filesArray.some(file => file.hasParseFailed);
+                    }
+                    _loadSettings();
                 }
             }
             onLoadFailed: {
