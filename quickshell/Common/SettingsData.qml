@@ -1787,7 +1787,6 @@ Singleton {
     function loadSettings() {
         _loading = true;
         _parseError = false;
-        _pendingMigration = null;
 
         try {
             let obj = getSettingsObject();
@@ -1799,7 +1798,6 @@ Singleton {
             if (oldVersion < settingsConfigVersion) {
                 const migrated = Store.migrateToVersion(obj, settingsConfigVersion);
                 if (migrated) {
-                    _pendingMigration = migrated;
                     obj = migrated;
                 }
             }
@@ -1874,8 +1872,6 @@ Singleton {
         Qt.callLater(() => _reconcileConnectedFrameBarStyles());
     }
 
-    property var _pendingMigration: null
-
     function _mergeSessionState() {
         if (!_hasLoaded || !SessionData._hasLoaded)
             return;
@@ -1912,10 +1908,7 @@ Singleton {
             _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
             if (wasReadOnly)
                 log.info("settings.json is now writable");
-            if (_pendingMigration)
-                settingsFile.setText(JSON.stringify(_pendingMigration, null, 2));
         }
-        _pendingMigration = null;
     }
 
     function _checkForUnsavedChanges() {
