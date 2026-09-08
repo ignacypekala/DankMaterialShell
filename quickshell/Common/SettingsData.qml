@@ -3578,7 +3578,6 @@ Singleton {
                     const txt = settingsFileView.text();
                     if (!txt || !txt.trim()) {
                         hasParseFailed = true;
-                        settingsFile.parseError();
                         return;
                     }
                     settingsFile.settings = JSON.parse(txt);
