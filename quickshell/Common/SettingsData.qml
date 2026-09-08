@@ -1492,7 +1492,7 @@ Singleton {
         Processes.detectAuthCapabilities();
     }
 
-    Component.onCompleted: {
+    function _startAfterSettingsFilesFound() {
         if (isGreeterMode)
             return;
         Processes.settingsRoot = root;
@@ -3545,6 +3545,12 @@ Singleton {
             selfWrite = true;
             settingsFileView.setText(JSON.stringify(settings, null, 2));
         }
+        function getSettings() {
+            if (!hasLoaded) {
+                settingsFileView.waitForJob();
+            }
+            return settings;
+        }
 
         property Timer timer: Timer {
             id: settingsFileReloadDebounce
@@ -3589,7 +3595,7 @@ Singleton {
                         hasParseFailed = true;
                         _parseError = true;
                         const msg = error.message;
-                        const fileName = filePath.split("/").pop();
+                        const fileName = filePath?.split("/").pop();
                         log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
                         Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
@@ -3606,14 +3612,33 @@ Singleton {
         }
     }
 
+    property bool _allFilesRegistered: false
+    property int _registeredFiles: 0
     property var settingFiles: ({})
+    function _registerSettingsFile(index, file) {
+        settingFiles[index] = file;
+        _registeredFiles++;
+        _checkIfAllSettingsFilesFound();
+    }
+    function _checkIfAllSettingsFilesFound() {
+        if (_allFilesRegistered || settingsFolderModel.status !== FolderListModel.Ready) {
+            return;
+        }
+        const expectedCount = settingsFolderModel.count + 1;
+        if (_registeredFiles === expectedCount) {
+            _allFilesRegistered = true;
+            _startAfterSettingsFilesFound();
+        }
+    }
+    function _unregisterSettingsFile(index) {
+        delete settingFiles[index];
+        _registeredFiles--;
+    }
     function getSettingsObject() {
         const settingsObject = {};
         for (const index in settingFiles) {
             const settingFile = settingFiles[index];
-            if (settingFile.hasLoaded) {
-                Object.assign(settingsObject, settingFile.settings);
-            }
+            Object.assign(settingsObject, settingFile.getSettings());
         }
         return settingsObject;
     }
@@ -3624,7 +3649,7 @@ Singleton {
         filePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/settings.json"
 
         Component.onCompleted: {
-            settingFiles[0] = defaultSettingsFile;
+            _registerSettingsFile(0, defaultSettingsFile);
         }
     }
 
@@ -3636,12 +3661,17 @@ Singleton {
             folder: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
             showDirs: false
             nameFilters: ["*.json"]
+            onStatusChanged: {
+                if (status === FolderListModel.Ready) {
+                    _checkIfAllSettingsFilesFound();
+                }
+            }
         }
         onObjectAdded: (index, file) => {
-            settingFiles[index + 1] = file;
+            _registerSettingsFile(index + 1, file);
         }
-        onObjectRemoved: (index, file) => {
-            delete settingFiles[index + 1]
+        onObjectRemoved: (index) => {
+            _unregisterSettingsFile(index + 1);
         }
         delegate: SettingsFile {
             id: settingsFile
