@@ -3480,7 +3480,7 @@ Singleton {
 
     function _udpateSettingsAfterReload(file) {
         const filesArray = Object.values(settingFiles);
-        _loading = filesArray.every(file => file.isLoaded && !file.loading);
+        _loading = !filesArray.every(file => file.hasLoaded && !file.loading);
         if (_parseError) {
             _parseError = filesArray.some(file => file.hasParseFailed);
         }
