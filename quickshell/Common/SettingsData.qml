@@ -3579,8 +3579,7 @@ Singleton {
                 } finally {
                     isLoading = false;
                     const filesArray = Object.values(settingFiles);
-                    _loading = filesArray.some(file => file.loading);
-                    _allSettingsFilesLoaded = filesArray.every(file => file.hasLoaded)
+                    _allSettingsFilesLoaded = hasLoaded && filesArray.every(file => file.hasLoaded)
 
                     hasParseFailed = false;
                     if (_parseError) {
