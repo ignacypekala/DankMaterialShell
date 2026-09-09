@@ -1786,9 +1786,11 @@ Singleton {
 
     function _loadSettings() {
         const isInitial = _hasLoaded;
-        if (_loading || !_allSettingsFilesLoaded || _parseError) {
+        if (!_allSettingsFilesLoaded || _parseError) {
             return;
         }
+        // false when ran from _startAfterSettingsFilesFound
+        _loading = true;
 
         try {
             let obj = getSettingsObject();
@@ -1860,6 +1862,7 @@ Singleton {
             }
 
             _hasLoaded = true;
+
             if (isInitial) {
                 _mergeSessionState();
                 Qt.callLater(checkIconThemeDrift);
@@ -3583,7 +3586,9 @@ Singleton {
                     if (_parseError) {
                         _parseError = filesArray.some(file => file.hasParseFailed);
                     }
-                    _loadSettings();
+                    if (!filesArray.some(file => file.loading)) {
+                        _loadSettings();
+                    }
                 }
             }
             onLoadFailed: {
