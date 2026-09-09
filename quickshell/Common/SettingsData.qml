@@ -3561,6 +3561,9 @@ Singleton {
                 }
                 isLoading = true;
                 _loading = true;
+                _settingsFilesLoading = true
+                const hadParseFailed = hasParseFailed;
+                hasParseFailed = false;
                 try {
                     const txt = settingsFileView.text();
                     if (!txt || !txt.trim()) {
@@ -3581,8 +3584,7 @@ Singleton {
                     const filesArray = Object.values(settingFiles);
                     _allSettingsFilesLoaded = _allSettingsFilesLoaded || (hasLoaded && filesArray.every(file => file.hasLoaded))
 
-                    hasParseFailed = false;
-                    if (_parseError) {
+                    if (hadParseFailed && !hasParseFailed) {
                         _parseError = filesArray.some(file => file.hasParseFailed);
                     }
                     if (!filesArray.some(file => file.loading)) {
