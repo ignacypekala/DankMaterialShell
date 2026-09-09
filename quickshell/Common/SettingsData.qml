@@ -89,7 +89,6 @@ Singleton {
     property bool _pluginParseError: false
     property bool _hasLoaded: false
     property bool _allSettingsFilesLoaded: false
-    property bool _isReadOnly: false
     property var _loadedSettingsSnapshot: null
     property var pluginSettings: ({})
     property var builtInPluginSettings: ({})
@@ -3480,17 +3479,12 @@ Singleton {
         id: rightWidgetsModel
     }
 
-    function _registerSaveFailure() {
-        root._isReadOnly = Object.values(settingFiles).some(file => file.isReadOnly)
-    }
-
     function _mitigateLoadFailure() {
         if (isGreeterMode) {
             return;
         }
         applyStoredTheme();
     }
-
 
     component SettingsFile : QtObject {
         id: settingsFile
@@ -3500,7 +3494,6 @@ Singleton {
         property bool isLoading: true
         property bool hasLoaded: false
         property bool hasParseFailed: false
-        property bool isReadOnly: false
         property bool hasUnsavedChanges: false
         property bool selfWrite: false
         function setSettings(newSettings) {
@@ -3583,10 +3576,6 @@ Singleton {
             }
             onLoadFailed: {
                 _mitigateLoadFailure();
-            }
-            onSaveFailed: (error) => {
-                isReadOnly = true;
-                _registerSaveFailure();
             }
         }
     }
