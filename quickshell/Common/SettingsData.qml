@@ -3543,7 +3543,7 @@ Singleton {
                     return;
                 }
                 if (hasUnsavedChanges) {
-                    log.warn("Ignoring settings file loaded event, there are unsaved changes which could've been lost.")
+                    log.warn("Aborting settings file reload, there are unsaved changes which would've been lost.")
                     return
                 }
                 isLoading = true;
