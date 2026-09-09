@@ -3561,7 +3561,6 @@ Singleton {
                 }
                 isLoading = true;
                 _loading = true;
-                _settingsFilesLoading = true
                 const hadParseFailed = hasParseFailed;
                 hasParseFailed = false;
                 try {
