@@ -3696,15 +3696,32 @@ Singleton {
     Process {
         id: settingsWritableCheckProcess
 
-        property string settingsPath: Paths.strip(settingsFile.path)
+        function checkWritable(file) {
+            fileQueue = fileQueue.concat(file);
+            if (!running) {
+                running = true;
+            }
+        }
 
-        command: ["sh", "-c", "[ ! -f \"" + settingsPath + "\" ] || [ -w \"" + settingsPath + "\" ] && echo 'writable' || echo 'readonly'"]
+        property var fileQueue: ([])
+        property var file: fileQueue.length > 0 ? fileQueue[0] : null
+        property string filePath: {
+            if (file !== null) {
+                return Paths.strip(file.path);
+            }
+            return "";
+        }
+        command: ["sh", "-c", "[ ! -f \"" + filePath + "\" ] || [ -w \"" + filePath + "\" ] && echo 'writable' || echo 'readonly'"]
         running: false
 
         stdout: StdioCollector {
             onStreamFinished: {
                 const result = text.trim();
                 root._onWritableCheckComplete(result === "writable");
+                fileQueue.shift();
+                if (fileQueue.length > 0) {
+                    settingsWritableCheckProcess.running = true
+                }
             }
         }
     }
