@@ -3510,7 +3510,7 @@ Singleton {
             settingsFileView.setText(JSON.stringify(newSettings, null, 2));
         }
         function getSettings() {
-            if (!hasLoaded) {
+            if (!hasLoaded || isLoading) {
                 settingsFileView.waitForJob();
             }
             return settings;
