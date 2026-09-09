@@ -3549,7 +3549,7 @@ Singleton {
                         hasParseFailed = true;
                         return;
                     }
-                    settingsFile.settings = JSON.parse(txt);
+                    settings = JSON.parse(txt);
                     hasLoaded = true;
                 } catch (error) {
                     hasParseFailed = true;
