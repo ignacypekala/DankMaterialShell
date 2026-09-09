@@ -1883,8 +1883,8 @@ Singleton {
 
         } catch (e) {
             const msg = e.message;
-            log.error("Failed to apply settings. Error:", msg);
-            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to apply settings"), msg));
+            log.error("Failed to load settings. Error:", msg);
+            Qt.callLater(() => ToastService.showError(I18n.tr("Failed to load settings"), msg));
             applyStoredTheme();
         } finally {
             _loading = false;
@@ -3497,10 +3497,15 @@ Singleton {
         property bool hasUnsavedChanges: false
         property bool selfWrite: false
         function setSettings(newSettings) {
-            selfWrite = true;
-            hasUnsavedChanges = true;
-            settings = newSettings;
-            settingsFileView.setText(JSON.stringify(newSettings, null, 2));
+            const newSettingsJson = JSON.stringify(newSettings);
+            if (JSON.stringify(settings) !== newSettingsJson) {
+                settings = newSettings;
+                hasUnsavedChanges = true;
+                selfWrite = true;
+            }
+            if (hasUnsavedChanges) {
+                settingsFileView.setText(newSettingsJson);
+            }
         }
         function getSettings() {
             if (!hasLoaded || isLoading) {
@@ -3628,36 +3633,75 @@ Singleton {
         id: defaultSettingsFile
 
         filePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/settings.json"
+        property int index: 0
 
         Component.onCompleted: {
             _registerSettingsFile(defaultSettingsFile);
         }
     }
 
+    Timer {
+        id: settingsFilesModelSyncDebounce
+        interval: 50
+        repeat: false
+        running: false
+        onTriggered: {
+            try {
+                const folderModel = settingsFolderModel;
+                const listModel = settingsFilesListModel;
+
+                if (folderModel.status === FolderListModel.Ready) {
+                    const folderPaths = (new Array(folderModel.count)).fill(1).map((_, index) => {
+                        return folderModel.get(index, "filePath")
+                    });
+
+                    for (const filePath of folderPaths) {
+                        if (!_settingsFiles.has(filePath)) {
+                            listModel.append({ filePath });
+                        }
+                    }
+                    const folderPathsSet = new Set(folderPaths);
+                    for (let i = 1; i < _settingsFilesPaths.length; i++) {
+                        const filePath = _settingsFilesPaths[i];
+                        if (!folderPathsSet.has(filePath)) {
+                            const file = _settingsFiles.get(filePath);
+                            listModel.remove(file.index);
+                        }
+                    }
+                } else {
+                    restart();
+                }
+            } catch (e) {
+                log.error("Failed to sync settings files models:", e)
+            }
+        }
+    }
+    ListModel {
+        id: settingsFilesListModel
+    }
+    FolderListModel {
+        id: settingsFolderModel
+        folder: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
+        showDirs: false
+        nameFilters: ["*.json"]
+        onStatusChanged: {
+            settingsFilesModelSyncDebounce.restart()
+        }
+    }
+
     Instantiator {
         id: settingsLoader
 
-        model: FolderListModel {
-            id: settingsFolderModel
-            folder: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
-            showDirs: false
-            nameFilters: ["*.json"]
-            onStatusChanged: {
-                if (status === FolderListModel.Ready) {
-                    _checkIfAllSettingsFilesFound();
-                }
-            }
-        }
-        onObjectAdded: (index, file) => {
-            _registerSettingsFile(index + 1, file);
+        model: settingsFilesListModel
+        onObjectAdded: (_, file) => {
             _registerSettingsFile(file);
         }
-        onObjectRemoved: (index) => {
-            _unregisterSettingsFile(index + 1);
+        onObjectRemoved: (_, file) => {
             _unregisterSettingsFile(file);
         }
         delegate: SettingsFile {
             id: settingsFile
+            property int index
         }
     }
 
