@@ -1794,6 +1794,7 @@ Singleton {
 
         try {
             let obj = getSettingsObject();
+            let loadedSettings = JSON.stringify(obj);
 
             if (isInitial) {
                 const oldVersion = obj?.configVersion ?? 0;
@@ -1822,8 +1823,9 @@ Singleton {
                 if (obj?.lockScreenActiveMonitor !== undefined) {
                     var oldVal = obj.lockScreenActiveMonitor;
                     if (oldVal && oldVal !== "all") {
-                        if (!obj.screenPreferences)
-                        obj.screenPreferences = {};
+                        if (!obj.screenPreferences) {
+                            obj.screenPreferences = {};
+                        }
                         if (obj.screenPreferences.lockScreen === undefined) {
                             obj.screenPreferences.lockScreen = [oldVal];
                         }
@@ -1839,7 +1841,7 @@ Singleton {
 
             const prevFrameEnabled = frameEnabled;
             const prevFrameMode = frameMode;
-
+            const unsavedChanges = loadedSettings !== JSON.stringify(obj);
             Store.parse(root, obj);
 
             // set() enforces this pair, but a hand-edited settings.json bypasses set() entirely.
@@ -1866,7 +1868,6 @@ Singleton {
             if (isInitial) {
                 _mergeSessionState();
                 Qt.callLater(checkIconThemeDrift);
-                _checkSettingsWritable();
             }
             applyStoredTheme();
             updateCompositorCursor();
@@ -1876,6 +1877,9 @@ Singleton {
                 if (!_parseError && frameChanged) {
                     updateFrameCompositorLayout();
                 }
+            }
+            if (unsavedChanges) {
+                saveSettings();
             }
 
         } catch (e) {
@@ -1913,30 +1917,6 @@ Singleton {
         function onLoaded() {
             root._mergeSessionState();
         }
-    }
-
-    function _checkSettingsWritable() {
-        settingsWritableCheckProcess.running = true;
-    }
-
-    function _onWritableCheckComplete(writable) {
-        const wasReadOnly = _isReadOnly;
-        _isReadOnly = !writable;
-        if (_isReadOnly) {
-            if (!wasReadOnly)
-                log.info("settings.json is now read-only");
-        } else {
-            _loadedSettingsSnapshot = JSON.stringify(Store.toJson(root));
-            if (wasReadOnly)
-                log.info("settings.json is now writable");
-        }
-    }
-
-    function _checkForUnsavedChanges() {
-        if (!_hasLoaded || !_loadedSettingsSnapshot)
-            return false;
-        const current = JSON.stringify(Store.toJson(root));
-        return current !== _loadedSettingsSnapshot;
     }
 
     function getCurrentSettingsJson() {
@@ -3521,10 +3501,13 @@ Singleton {
         property bool hasLoaded: false
         property bool hasParseFailed: false
         property bool isReadOnly: false
+        property bool hasUnsavedChanges: false
         property bool selfWrite: false
-        function setSettings(settings) {
+        function setSettings(newSettings) {
             selfWrite = true;
-            settingsFileView.setText(JSON.stringify(settings, null, 2));
+            hasUnsavedChanges = true;
+            settings = newSettings;
+            settingsFileView.setText(JSON.stringify(newSettings, null, 2));
         }
         function getSettings() {
             if (!hasLoaded) {
@@ -3559,6 +3542,10 @@ Singleton {
                 if (isGreeterMode) {
                     return;
                 }
+                if (hasUnsavedChanges) {
+                    log.warn("Ignoring settings file loaded event, there are unsaved changes which could've been lost.")
+                    return
+                }
                 isLoading = true;
                 _loading = true;
                 const hadParseFailed = hasParseFailed;
@@ -3590,6 +3577,9 @@ Singleton {
                         _loadSettings();
                     }
                 }
+            }
+            onSaved: {
+                hasUnsavedChanges = false;
             }
             onLoadFailed: {
                 _mitigateLoadFailure();
@@ -3692,37 +3682,4 @@ Singleton {
     }
 
     property bool pluginSettingsFileExists: false
-
-    Process {
-        id: settingsWritableCheckProcess
-
-        function checkWritable(file) {
-            fileQueue = fileQueue.concat(file);
-            if (!running) {
-                running = true;
-            }
-        }
-
-        property var fileQueue: ([])
-        property var file: fileQueue.length > 0 ? fileQueue[0] : null
-        property string filePath: {
-            if (file !== null) {
-                return Paths.strip(file.path);
-            }
-            return "";
-        }
-        command: ["sh", "-c", "[ ! -f \"" + filePath + "\" ] || [ -w \"" + filePath + "\" ] && echo 'writable' || echo 'readonly'"]
-        running: false
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const result = text.trim();
-                root._onWritableCheckComplete(result === "writable");
-                fileQueue.shift();
-                if (fileQueue.length > 0) {
-                    settingsWritableCheckProcess.running = true
-                }
-            }
-        }
-    }
 }
