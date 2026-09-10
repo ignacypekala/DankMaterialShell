@@ -1784,7 +1784,7 @@ Singleton {
     }
 
     function _loadSettings() {
-        const isInitial = _hasLoaded;
+        const isInitial = !_hasLoaded;
         if (!_allSettingsFilesLoaded || _parseError) {
             return;
         }
