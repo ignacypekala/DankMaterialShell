@@ -170,7 +170,6 @@ function toJson(root) {
         var value = root[k];
         if (k === "desktopWidgetInstances") value = withoutInstancePositions(value);
         if (k === "builtInPluginSettings") value = withoutSessionBackedPluginState(value);
-        if (Util.isDefault(value, SPEC[k].def)) continue;
         out[k] = value;
     }
     out.configVersion = root.settingsConfigVersion;
