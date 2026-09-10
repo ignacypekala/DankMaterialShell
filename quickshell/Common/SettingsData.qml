@@ -3625,7 +3625,6 @@ Singleton {
     function _unregisterSettingsFile(file) {
         _settingsFiles.delete(file.filePath);
         _settingsFilesPaths = _settingsFilesPaths.filter(path => path != file.filePath);
-        _registeredFiles--;
     }
     function _checkIfAllSettingsFilesFound() {
         if (_allFilesRegistered || settingsFolderModel.status !== FolderListModel.Ready) {
