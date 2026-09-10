@@ -2005,7 +2005,6 @@ Singleton {
         }
         return splitSettings;
     }
-
     function saveSettings() {
         if (_loading || _parseError || !_hasLoaded) return;
         settingsSaveDebounce.restart();
@@ -3494,9 +3493,9 @@ Singleton {
             if (JSON.stringify(settings, null, 2) !== newSettingsJson) {
                 settings = newSettings;
                 hasUnsavedChanges = true;
-                selfWrite = true;
             }
             if (hasUnsavedChanges) {
+                selfWrite = true;
                 settingsFileView.setText(newSettingsJson);
             }
         }
@@ -3505,6 +3504,15 @@ Singleton {
                 settingsFileView.waitForJob();
             }
             return settings;
+        }
+        function retrySaving() {
+            if (!hasUnsavedChanges) {
+                return;
+            }
+            // Quickshell only writes if the text has changed, but doesn't provide a way to force a write.
+            const json = JSON.stringify(settings, null, 2) + (settingsSaveFailRecovery.tries % 2 === 1) ? " " : "";
+            selfWrite = true;
+            settingsFileView.setText(json);
         }
 
         property Timer timer: Timer {
@@ -3534,7 +3542,9 @@ Singleton {
                     return;
                 }
                 if (hasUnsavedChanges) {
-                    log.warn("Aborting settings file reload, there are unsaved changes which would've been lost.")
+                    const fileName = filePath?.split("/").pop() || "unknown";
+                    log.warn(`Aborting ${fileName} reload, there are unsaved changes which would've been lost`)
+                    settingsSaveFailRecovery.start();
                     return
                 }
                 isLoading = true;
@@ -3571,6 +3581,15 @@ Singleton {
             }
             onSaved: {
                 hasUnsavedChanges = false;
+                const fileName = filePath?.split("/").pop() || "unknown";
+                if (_failedSaveSettingsFiles.has(settingsFile)) {
+                    log.info(`Settings file '${fileName}' saved successfully after previous failures`)
+                    _failedSaveSettingsFiles.delete(settingsFile);
+                }
+            }
+            onSaveFailed: {
+                _failedSaveSettingsFiles.add(settingsFile);
+                settingsSaveFailRecovery.start();
             }
             onLoadFailed: {
                 _mitigateLoadFailure();
@@ -3581,6 +3600,7 @@ Singleton {
     property bool _allFilesRegistered: false
     property var _settingsFiles: new Map()
     property var _settingsFilesPaths: ([])
+    property var _failedSaveSettingsFiles: new Set()
     function _registerSettingsFile(file) {
         const filePath = file.filePath;
         if (_settingsFiles.has(filePath)) {
@@ -3723,6 +3743,28 @@ Singleton {
             if (!_isMissingPluginSettingsError(error))
                 log.warn("Failed to load plugin_settings.json. Error:", msg);
             _resetPluginSettings();
+        }
+    }
+
+    Timer {
+        id: settingsSaveFailRecovery
+
+        property int tries: 0
+        interval: {
+            const delay = 2 ** (tries + 1);
+            return (delay > 60 ? 60 : delay) * 1000;
+        }
+        repeat: true
+        running: false
+        onTriggered: {
+            if (_failedSaveSettingsFiles.size === 0 || tries >= 15) {
+                tries = 0;
+                stop();
+            }
+            tries++;
+            for (const file of _failedSaveSettingsFiles) {
+                file.retrySaving();
+            }
         }
     }
 
