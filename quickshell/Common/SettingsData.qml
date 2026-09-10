@@ -3773,6 +3773,7 @@ Singleton {
             if (_failedSaveSettingsFiles.size === 0 || tries >= 15) {
                 tries = 0;
                 stop();
+                return;
             }
             tries++;
             for (const file of _failedSaveSettingsFiles) {
