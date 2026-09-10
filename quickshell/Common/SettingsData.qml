@@ -3573,7 +3573,7 @@ Singleton {
                     if (hadParseFailed && !hasParseFailed) {
                         _parseError = filesArray.some(file => file.hasParseFailed);
                     }
-                    if (!filesArray.some(file => file.loading)) {
+                    if (!filesArray.some(file => file.isLoading)) {
                         _loadSettings();
                     }
                 }
