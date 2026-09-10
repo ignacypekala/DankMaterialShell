@@ -3728,6 +3728,7 @@ Singleton {
         }
         onObjectRemoved: (_, file) => {
             _unregisterSettingsFile(file);
+            _loadSettings();
         }
         delegate: SettingsFile {
             id: settingsFile
