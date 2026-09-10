@@ -3510,7 +3510,7 @@ Singleton {
                 return;
             }
             // Quickshell only writes if the text has changed, but doesn't provide a way to force a write.
-            const json = JSON.stringify(settings, null, 2) + (settingsSaveFailRecovery.tries % 2 === 1) ? " " : "";
+            const json = JSON.stringify(settings, null, 2) + ((settingsSaveFailRecovery.tries % 2 === 1) ? " " : "");
             selfWrite = true;
             settingsFileView.setText(json);
         }
