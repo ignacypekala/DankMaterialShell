@@ -3568,7 +3568,7 @@ Singleton {
                     Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
                     isLoading = false;
-                    const filesArray = Object.values(_settingsFiles);
+                    const filesArray = Array.from(_settingsFiles.values());
                     _allSettingsFilesLoaded = _allSettingsFilesLoaded || (hasLoaded && filesArray.every(file => file.hasLoaded))
 
                     if (hadParseFailed && !hasParseFailed) {
@@ -3610,7 +3610,7 @@ Singleton {
         if (file === defaultSettingsFile) {
             index = 0;
         } else {
-            index = _settingsFilesPaths.find((path, index) => {
+            index = _settingsFilesPaths.findIndex((path, index) => {
                 return path > filePath && index > 0;
             });
         }
@@ -3676,11 +3676,10 @@ Singleton {
                     }
                 }
                 const folderPathsSet = new Set(folderPaths);
-                for (let i = 1; i < _settingsFilesPaths.length; i++) {
-                    const filePath = _settingsFilesPaths[i];
+                for (let i = listModel.count - 1; i >= 0; i--) {
+                    const filePath = listModel.get(i).filePath;
                     if (!folderPathsSet.has(filePath)) {
-                        const file = _settingsFiles.get(filePath);
-                        listModel.remove(file.index);
+                        listModel.remove(i);
                     }
                 }
             } else {
@@ -3732,7 +3731,6 @@ Singleton {
         }
         delegate: SettingsFile {
             id: settingsFile
-            property int index
         }
     }
 
