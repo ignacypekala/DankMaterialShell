@@ -89,7 +89,6 @@ Singleton {
     property bool _pluginParseError: false
     property bool _hasLoaded: false
     property bool _allSettingsFilesLoaded: false
-    property var _loadedSettingsSnapshot: null
     property var pluginSettings: ({})
     property var builtInPluginSettings: ({})
 
