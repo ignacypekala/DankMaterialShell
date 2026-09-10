@@ -3663,33 +3663,29 @@ Singleton {
         repeat: false
         running: false
         onTriggered: {
-            try {
-                const folderModel = settingsFolderModel;
-                const listModel = settingsFilesListModel;
+            const folderModel = settingsFolderModel;
+            const listModel = settingsFilesListModel;
 
-                if (folderModel.status === FolderListModel.Ready) {
-                    const folderPaths = (new Array(folderModel.count)).fill(1).map((_, index) => {
-                        return folderModel.get(index, "filePath")
-                    });
+            if (folderModel.status === FolderListModel.Ready) {
+                const folderPaths = (new Array(folderModel.count)).fill(1).map((_, index) => {
+                    return folderModel.get(index, "filePath")
+                });
 
-                    for (const filePath of folderPaths) {
-                        if (!_settingsFiles.has(filePath)) {
-                            listModel.append({ filePath });
-                        }
+                for (const filePath of folderPaths) {
+                    if (!_settingsFiles.has(filePath)) {
+                        listModel.append({ filePath });
                     }
-                    const folderPathsSet = new Set(folderPaths);
-                    for (let i = 1; i < _settingsFilesPaths.length; i++) {
-                        const filePath = _settingsFilesPaths[i];
-                        if (!folderPathsSet.has(filePath)) {
-                            const file = _settingsFiles.get(filePath);
-                            listModel.remove(file.index);
-                        }
-                    }
-                } else {
-                    restart();
                 }
-            } catch (e) {
-                log.error("Failed to sync settings files models:", e)
+                const folderPathsSet = new Set(folderPaths);
+                for (let i = 1; i < _settingsFilesPaths.length; i++) {
+                    const filePath = _settingsFilesPaths[i];
+                    if (!folderPathsSet.has(filePath)) {
+                        const file = _settingsFiles.get(filePath);
+                        listModel.remove(file.index);
+                    }
+                }
+            } else {
+                restart();
             }
         }
     }
