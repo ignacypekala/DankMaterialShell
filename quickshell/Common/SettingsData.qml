@@ -3595,7 +3595,11 @@ Singleton {
             });
         }
         _settingsFiles.set(filePath, file);
-        _settingsFilesPaths.splice(index, 0, filePath);
+        if (index >= 0) {
+            _settingsFilesPaths.splice(index, 0, filePath);
+        } else {
+            _settingsFilesPaths.push(filePath);
+        }
         _checkIfAllSettingsFilesFound();
     }
     function _unregisterSettingsFile(file) {
