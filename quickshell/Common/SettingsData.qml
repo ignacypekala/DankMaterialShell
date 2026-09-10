@@ -1983,8 +1983,7 @@ Singleton {
         }
     }
 
-    function _getSettingsSplitByFile() {
-        const settings = Store.toJson(root);
+    function _splitSettingsByFile(settings) {
         const splitSettings = {};
 
         const filePaths = _settingsFilesPaths.slice()
@@ -2008,23 +2007,17 @@ Singleton {
     }
 
     function saveSettings() {
-        try {
-            if (_loading || _parseError || !_hasLoaded)
-            return;
-            _selfWrite = true;
-            const splitSettings = _getSettingsSplitByFile();
-            for (const index in splitSettings) {
-                const fileSettings = splitSettings[index];
-                const file = settingFiles[index];
-                file.setSettings(fileSettings);
-            }
-
-        } catch (e) {
-            log.error(`Failed to save settings at ${e.lineNumber}`, e)
+        if (_loading || _parseError || !_hasLoaded) return;
+        settingsSaveDebounce.restart();
+    }
+    function _saveSettings() {
+        const settings = Store.toJson(root);
+        const splitSettings = _splitSettingsByFile(settings);
+        for (const path in splitSettings) {
+            const fileSettings = splitSettings[path];
+            const file = _settingsFiles.get(path);
+            file.setSettings(fileSettings);
         }
-
-        if (_isReadOnly)
-            _checkSettingsWritable();
     }
 
     function savePluginSettings() {
@@ -3497,8 +3490,8 @@ Singleton {
         property bool hasUnsavedChanges: false
         property bool selfWrite: false
         function setSettings(newSettings) {
-            const newSettingsJson = JSON.stringify(newSettings);
-            if (JSON.stringify(settings) !== newSettingsJson) {
+            const newSettingsJson = JSON.stringify(newSettings, null, 2);
+            if (JSON.stringify(settings, null, 2) !== newSettingsJson) {
                 settings = newSettings;
                 hasUnsavedChanges = true;
                 selfWrite = true;
@@ -3727,6 +3720,14 @@ Singleton {
                 log.warn("Failed to load plugin_settings.json. Error:", msg);
             _resetPluginSettings();
         }
+    }
+
+    Timer {
+        id: settingsSaveDebounce
+        interval: 50
+        repeat: false
+        running: false
+        onTriggered: _saveSettings()
     }
 
     property bool pluginSettingsFileExists: false
