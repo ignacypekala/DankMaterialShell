@@ -1792,7 +1792,7 @@ Singleton {
         _loading = true;
 
         try {
-            let obj = getSettingsObject();
+            let obj = _getSettingsObjectFromFiles();
             let loadedSettings = JSON.stringify(obj);
 
             if (isInitial) {
@@ -3637,7 +3637,7 @@ Singleton {
             _startAfterSettingsFilesFound();
         }
     }
-    function getSettingsObject() {
+    function _getSettingsObjectFromFiles() {
         const settingsObject = {};
         for (const path of _settingsFilesPaths) {
             const settingsFile = _settingsFiles.get(path);
