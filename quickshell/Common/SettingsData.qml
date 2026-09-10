@@ -3701,6 +3701,25 @@ Singleton {
             settingsFilesModelSyncDebounce.restart()
         }
     }
+    Process {
+        command: ["mkdir", "-p", Paths.strip(settingsFolderModel.folder)]
+        property string errorMsg: "";
+        stderr: StdioCollector {
+            onStreamFinished: {
+                errorMsg = text.trim();
+            }
+        }
+        running: true
+        // qmllint disable signal-handler-parameters
+        onExited: (code, _) => {
+            if (code !== 0) {
+                log.error(`Failed to create config.d directory, exited with code ${code}:`, errorMsg);
+            } else {
+                _checkIfAllSettingsFilesFound();
+            }
+
+        }
+    }
 
     Instantiator {
         id: settingsLoader
