@@ -3575,7 +3575,7 @@ Singleton {
                     if (hadParseFailed && !hasParseFailed) {
                         _parseError = filesArray.some(file => file.hasParseFailed);
                     }
-                    if (!filesArray.some(file => file.isLoading)) {
+                    if (!_hasLoaded && !filesArray.some(file => file.isLoading)) {
                         _loadSettings();
                     }
                 }
@@ -3638,11 +3638,19 @@ Singleton {
         _settingsFilesPaths = _settingsFilesPaths.filter(path => path != file.filePath);
     }
     function _checkIfAllSettingsFilesFound() {
-        if (_allFilesRegistered || settingsFolderModel.status !== FolderListModel.Ready) {
+        if (_allFilesRegistered || !configDirExists.checked) {
             return;
         }
-        const expectedCount = settingsFolderModel.count + 1;
-        if (_settingsFilesPaths.length === expectedCount) {
+        let expectedCount = 1;
+        if (configDirExists.exists) {
+            const folderModelReady = settingsFolderModel.status === FolderListModel.Ready;
+            if (!folderModelReady) {
+                return;
+            }
+            expectedCount += settingsFolderModel.count;
+        } else {
+        }
+        if (_settingsFilesPaths.length == expectedCount) {
             _allFilesRegistered = true;
             _startAfterSettingsFilesFound();
         }
@@ -3703,30 +3711,28 @@ Singleton {
     }
     FolderListModel {
         id: settingsFolderModel
-        folder: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
+
+        // Folder seems to be reset to the CWD if the directory doesn't exist.
+        property url dir: StandardPaths.writableLocation(StandardPaths.ConfigLocation) + "/DankMaterialShell/config.d"
+        folder: dir
         showDirs: false
         nameFilters: ["*.json"]
         onStatusChanged: {
-            settingsFilesModelSyncDebounce.restart()
+            settingsFilesModelSyncDebounce.restart();
         }
     }
     Process {
-        command: ["mkdir", "-p", Paths.strip(settingsFolderModel.folder)]
-        property string errorMsg: "";
-        stderr: StdioCollector {
-            onStreamFinished: {
-                errorMsg = text.trim();
-            }
-        }
-        running: !isGreeterMode
-        // qmllint disable signal-handler-parameters
-        onExited: (code, _) => {
-            if (code !== 0) {
-                log.error(`Failed to create config.d directory, exited with code ${code}:`, errorMsg);
-            } else {
-                _checkIfAllSettingsFilesFound();
-            }
+        id: configDirExists
 
+        command: ["test", "-d", settingsFolderModel.dir]
+        running: true
+        property bool checked: false
+        property bool exists: false
+        // qmllint disable signal-handler-parameters
+        onExited: (code) => {
+            exists = code === 0;
+            checked = true;
+            _checkIfAllSettingsFilesFound()
         }
     }
 
