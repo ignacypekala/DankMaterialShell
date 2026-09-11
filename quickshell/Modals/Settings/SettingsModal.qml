@@ -321,7 +321,7 @@ DankFloatingWindow {
                     DankButton {
                         id: copySettingsButton
 
-                        visible: SettingsData._isReadOnly && SettingsData._hasUnsavedChanges
+                        visible: SettingsData.isReadOnly
                         text: "settings.json"
                         iconName: "content_copy"
                         backgroundColor: Theme.primary
