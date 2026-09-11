@@ -1498,6 +1498,7 @@ Singleton {
         initializeListModels();
         refreshAuthAvailability();
         Processes.checkPluginSettings();
+        log.error("startup sequence ran")
     }
 
     function applyStoredTheme() {
@@ -3562,13 +3563,22 @@ Singleton {
                     _loadSettingsOrStartIfReady();
                 }
             }
-            onLoadFailed: {
+            onLoadFailed: (error) => {
                 if (isGreeterMode) {
                     return;
                 }
                 isLoading = false;
                 _loading = _settingsFilesPaths.some(path => _settingsFiles.get(path).isLoading);
+                const name = filePath.split("/").pop() || "unknown";
+                if (error === FileViewError.FileNotFound) {
+                    // fake that file has been loaded so that it gets written after a change.
+                    hasLoaded = true;
+                }
                 applyStoredTheme();
+                if (hasLoaded) {
+                    _checkIfAllSettingsFilesLoaded();
+                }
+                _loadSettingsOrStartIfReady();
             }
             onSaved: {
                 const filesArray = Array.from(_settingsFiles.values());
