@@ -3585,7 +3585,7 @@ Singleton {
                 hasUnsavedChanges = false;
                 hasUnsavedChanges = filesArray.every(file => !file.hasUnsavedChanges);
                 isFileReadOnly = false;
-                isReadOnly = filesArray.every(file => !file.isFileReadOnly)
+                isReadOnly = filesArray.some(file => file.isFileReadOnly)
 
                 const fileName = filePath?.split("/").pop() || "unknown";
                 if (_failedSaveSettingsFiles.has(settingsFile)) {
