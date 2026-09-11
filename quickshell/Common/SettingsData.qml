@@ -3681,6 +3681,10 @@ Singleton {
         repeat: false
         running: false
         onTriggered: {
+            if (!configDirExists.checked) {
+                restart();
+                return;
+            }
             if (!configDirExists.exists) {
                 return;
             }
@@ -3734,6 +3738,9 @@ Singleton {
         // qmllint disable signal-handler-parameters
         onExited: (code) => {
             exists = code === 0;
+            if (exists) {
+                settingsFilesModelSyncDebounce.restart();
+            }
             checked = true;
             _checkIfAllSettingsFilesFound()
         }
