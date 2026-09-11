@@ -3681,6 +3681,9 @@ Singleton {
         repeat: false
         running: false
         onTriggered: {
+            if (!configDirExists.exists) {
+                return;
+            }
             const folderModel = settingsFolderModel;
             const listModel = settingsFilesListModel;
 
