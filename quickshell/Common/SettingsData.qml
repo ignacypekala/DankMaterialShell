@@ -1492,9 +1492,7 @@ Singleton {
         Processes.detectAuthCapabilities();
     }
 
-    function _startAfterSettingsFilesFound() {
-        if (isGreeterMode)
-            return;
+    function _runStartSequence() {
         Processes.settingsRoot = root;
         _loadSettings();
         initializeListModels();
@@ -3501,9 +3499,6 @@ Singleton {
             }
         }
         function getSettings() {
-            if (!hasLoaded || isLoading) {
-                settingsFileView.waitForJob();
-            }
             return settings;
         }
         function retrySaving() {
@@ -3527,7 +3522,7 @@ Singleton {
             id: settingsFileView
 
             path: isGreeterMode ? "" : filePath
-            blockLoading: true
+            blockLoading: false
             blockWrites: true
             atomicWrites: true
             watchChanges: !isGreeterMode
@@ -3570,12 +3565,17 @@ Singleton {
                 } finally {
                     isLoading = false;
                     const filesArray = Array.from(_settingsFiles.values());
-                    _allSettingsFilesLoaded = _allSettingsFilesLoaded || (hasLoaded && filesArray.every(file => file.hasLoaded))
-
+                    _allSettingsFilesLoaded = _allSettingsFilesLoaded || (
+                        hasLoaded && _allFilesRegistered && filesArray.every(file => file.hasLoaded))
                     if (hadParseFailed && !hasParseFailed) {
                         _parseError = filesArray.some(file => file.hasParseFailed);
                     }
-                    if (!_hasLoaded && !filesArray.some(file => file.isLoading)) {
+
+                    if (!_hasLoaded) {
+                        if (_allSettingsFilesLoaded) {
+                            _runStartSequence();
+                        }
+                    } else if (filesArray.every(file => !file.isLoading)) {
                         _loadSettings();
                     }
                 }
@@ -3643,16 +3643,19 @@ Singleton {
         }
         let expectedCount = 1;
         if (configDirExists.exists) {
-            const folderModelReady = settingsFolderModel.status === FolderListModel.Ready;
-            if (!folderModelReady) {
+            if (!(settingsFolderModel.status === FolderListModel.Ready)) {
                 return;
             }
             expectedCount += settingsFolderModel.count;
-        } else {
         }
         if (_settingsFilesPaths.length == expectedCount) {
             _allFilesRegistered = true;
-            _startAfterSettingsFilesFound();
+            if (expectedCount === 1) {
+                _allSettingsFilesLoaded = defaultSettingsFile.hasLoaded;
+            }
+            if (_allSettingsFilesLoaded) {
+                _runStartSequence();
+            }
         }
     }
     function _getSettingsObjectFromFiles() {
