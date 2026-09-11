@@ -3718,7 +3718,7 @@ Singleton {
                 errorMsg = text.trim();
             }
         }
-        running: true
+        running: !isGreeterMode
         // qmllint disable signal-handler-parameters
         onExited: (code, _) => {
             if (code !== 0) {
