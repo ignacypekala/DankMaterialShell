@@ -89,6 +89,7 @@ Singleton {
     property bool _pluginParseError: false
     property bool _hasLoaded: false
     property bool _allSettingsFilesLoaded: false
+    property bool isReadOnly: false
     property var pluginSettings: ({})
     property var builtInPluginSettings: ({})
 
@@ -3486,6 +3487,7 @@ Singleton {
         property bool hasLoaded: false
         property bool hasParseFailed: false
         property bool hasUnsavedChanges: false
+        property bool isFileReadOnly: false
         property bool selfWrite: false
         function setSettings(newSettings) {
             const newSettingsJson = JSON.stringify(newSettings, null, 2);
@@ -3579,15 +3581,26 @@ Singleton {
                 }
             }
             onSaved: {
+                const filesArray = Array.from(_settingsFiles.values());
                 hasUnsavedChanges = false;
+                hasUnsavedChanges = filesArray.every(file => !file.hasUnsavedChanges);
+                isFileReadOnly = false;
+                isReadOnly = filesArray.every(file => !file.isFileReadOnly)
+
                 const fileName = filePath?.split("/").pop() || "unknown";
                 if (_failedSaveSettingsFiles.has(settingsFile)) {
                     log.info(`Settings file '${fileName}' saved successfully after previous failures`)
                     _failedSaveSettingsFiles.delete(settingsFile);
                 }
             }
-            onSaveFailed: {
+            onSaveFailed: (error) => {
+                if (error === FileViewError.PermissionDenied) {
+                    isFileReadOnly = true;
+                    isReadOnly = true;
+                }
                 _failedSaveSettingsFiles.add(settingsFile);
+                const fileName = filePath?.split("/").pop() || "unknown";
+                log.warn(`Failed to save ${fileName}, retrying...`)
                 settingsSaveFailRecovery.start();
             }
             onLoadFailed: {
