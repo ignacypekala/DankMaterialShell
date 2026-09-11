@@ -1498,7 +1498,6 @@ Singleton {
         initializeListModels();
         refreshAuthAvailability();
         Processes.checkPluginSettings();
-        log.error("startup sequence ran")
     }
 
     function applyStoredTheme() {
