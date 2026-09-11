@@ -3552,8 +3552,9 @@ Singleton {
                 } finally {
                     isLoading = false;
                     const files = Array.from(_settingsFiles.values());
-                    _allSettingsFilesLoaded = _allSettingsFilesLoaded || (
-                        hasLoaded && _allFilesRegistered && files.every(file => file.hasLoaded))
+                    if (hasLoaded) {
+                        _checkIfAllSettingsFilesLoaded()
+                    }
                     if (hadParseFailed && !hasParseFailed) {
                         _parseError = files.some(file => file.hasParseFailed);
                     }
@@ -3634,12 +3635,8 @@ Singleton {
         }
         if (_settingsFilesPaths.length == expectedCount) {
             _allFilesRegistered = true;
-            if (expectedCount === 1) {
-                _allSettingsFilesLoaded = defaultSettingsFile.hasLoaded;
-            }
-            if (_allSettingsFilesLoaded) {
-                _runStartSequence();
-            }
+            _checkIfAllSettingsFilesLoaded()
+            _loadSettingsOrStartIfReady();
         }
     }
     function _getSettingsObjectFromFiles() {
@@ -3666,6 +3663,19 @@ Singleton {
             }
         }
         _loading = false;
+    }
+    function _checkIfAllSettingsFilesLoaded() {
+        if (_allSettingsFilesLoaded || !_allFilesRegistered) {
+            return;
+        }
+        _allSettingsFilesLoaded = true;
+        for (const path of _settingsFilesPaths) {
+            const file = _settingsFiles.get(path);
+            if (!file.hasLoaded) {
+                _allSettingsFilesLoaded = false;
+                return;
+            }
+        }
     }
 
     SettingsFile {
