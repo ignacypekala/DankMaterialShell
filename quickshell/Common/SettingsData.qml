@@ -3655,14 +3655,12 @@ Singleton {
         if (!_allSettingsFilesLoaded || files.some(file => file.isLoading)) {
             return;
         }
-        if (!_parseError) {
-            // Already true when ran from onLoaded, but false otherwise.
-            _loading = true;
-            if (!_hasLoaded) {
-                _runStartSequence();
-            } else {
-                _loadSettings();
-            }
+        // Already true when ran from onLoaded, but false otherwise.
+        _loading = true;
+        if (!_hasLoaded) {
+            _runStartSequence();
+        } else {
+            _loadSettings();
         }
         _loading = false;
     }
