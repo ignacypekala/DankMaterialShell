@@ -1870,7 +1870,7 @@ Singleton {
             }
             applyStoredTheme();
             updateCompositorCursor();
-            if (isInitial) {
+            if (!isInitial) {
                 // External edits reload under _loading, which skips the per-property transition triggers
                 const frameChanged = (frameEnabled !== prevFrameEnabled || (frameEnabled && frameMode !== prevFrameMode));
                 if (!_parseError && frameChanged) {
