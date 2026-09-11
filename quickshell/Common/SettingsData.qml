@@ -3727,7 +3727,7 @@ Singleton {
     Process {
         id: configDirExists
 
-        command: ["test", "-d", settingsFolderModel.dir]
+        command: ["test", "-d", Paths.strip(settingsFolderModel.dir)]
         running: true
         property bool checked: false
         property bool exists: false
