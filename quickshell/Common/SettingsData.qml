@@ -1783,11 +1783,6 @@ Singleton {
 
     function _loadSettings() {
         const isInitial = !_hasLoaded;
-        if (!_allSettingsFilesLoaded || _parseError) {
-            return;
-        }
-        // false when ran from _startAfterSettingsFilesFound
-        _loading = true;
 
         try {
             let obj = _getSettingsObjectFromFiles();
@@ -1884,8 +1879,6 @@ Singleton {
             log.error("Failed to load settings. Error:", msg);
             Qt.callLater(() => ToastService.showError(I18n.tr("Failed to load settings"), msg));
             applyStoredTheme();
-        } finally {
-            _loading = false;
         }
 
         if (isInitial) {
@@ -3469,13 +3462,6 @@ Singleton {
         id: rightWidgetsModel
     }
 
-    function _mitigateLoadFailure() {
-        if (isGreeterMode) {
-            return;
-        }
-        applyStoredTheme();
-    }
-
     component SettingsFile : QtObject {
         id: settingsFile
 
@@ -3558,27 +3544,28 @@ Singleton {
                 } catch (error) {
                     hasParseFailed = true;
                     _parseError = true;
+
                     const msg = error.message;
                     const fileName = filePath?.split("/").pop();
                     log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
                     Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
                     isLoading = false;
-                    const filesArray = Array.from(_settingsFiles.values());
+                    const files = Array.from(_settingsFiles.values());
                     _allSettingsFilesLoaded = _allSettingsFilesLoaded || (
-                        hasLoaded && _allFilesRegistered && filesArray.every(file => file.hasLoaded))
+                        hasLoaded && _allFilesRegistered && files.every(file => file.hasLoaded))
                     if (hadParseFailed && !hasParseFailed) {
-                        _parseError = filesArray.some(file => file.hasParseFailed);
+                        _parseError = files.some(file => file.hasParseFailed);
                     }
-
-                    if (!_hasLoaded) {
-                        if (_allSettingsFilesLoaded) {
-                            _runStartSequence();
-                        }
-                    } else if (filesArray.every(file => !file.isLoading)) {
-                        _loadSettings();
-                    }
+                    _loadSettingsOrStartIfReady();
                 }
+            }
+            onLoadFailed: {
+                if (isGreeterMode) {
+                    return;
+                }
+                _loading = _settingsFilesPaths.some(path => _settingsFiles.get(path).isLoading);
+                applyStoredTheme();
             }
             onSaved: {
                 const filesArray = Array.from(_settingsFiles.values());
@@ -3601,9 +3588,6 @@ Singleton {
                 const fileName = filePath?.split("/").pop() || "unknown";
                 log.warn(`Failed to save ${fileName}, retrying...`)
                 settingsSaveFailRecovery.start();
-            }
-            onLoadFailed: {
-                _mitigateLoadFailure();
             }
         }
     }
@@ -3665,6 +3649,23 @@ Singleton {
             Object.assign(settingsObject, settingsFile.getSettings());
         }
         return settingsObject;
+    }
+
+    function _loadSettingsOrStartIfReady() {
+        const files = Array.from(_settingsFiles.values());
+        if (!_allSettingsFilesLoaded || files.some(file => file.isLoading)) {
+            return;
+        }
+        if (!_parseError) {
+            // Already true when ran from onLoaded, but false otherwise.
+            _loading = true;
+            if (!_hasLoaded) {
+                _runStartSequence();
+            } else {
+                _loadSettings();
+            }
+        }
+        _loading = false;
     }
 
     SettingsFile {
@@ -3758,7 +3759,7 @@ Singleton {
         }
         onObjectRemoved: (_, file) => {
             _unregisterSettingsFile(file);
-            _loadSettings();
+            _loadSettingsOrStartIfReady();
         }
         delegate: SettingsFile {
             id: settingsFile
