@@ -3467,7 +3467,7 @@ Singleton {
 
         required property string filePath
         property var settings: ({})
-        property bool isLoading: true
+        property bool isLoading: false
         property bool hasLoaded: false
         property bool hasParseFailed: false
         property bool hasUnsavedChanges: false
@@ -3516,6 +3516,7 @@ Singleton {
                 if (selfWrite) {
                     selfWrite = false;
                 } else {
+                    isLoading = true;
                     settingsFileReloadDebounce.restart();
                 }
             }
@@ -3565,6 +3566,7 @@ Singleton {
                 if (isGreeterMode) {
                     return;
                 }
+                isLoading = false;
                 _loading = _settingsFilesPaths.some(path => _settingsFiles.get(path).isLoading);
                 applyStoredTheme();
             }
