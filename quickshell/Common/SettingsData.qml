@@ -3583,7 +3583,6 @@ Singleton {
             onSaved: {
                 const filesArray = Array.from(_settingsFiles.values());
                 hasUnsavedChanges = false;
-                hasUnsavedChanges = filesArray.every(file => !file.hasUnsavedChanges);
                 isFileReadOnly = false;
                 isReadOnly = filesArray.some(file => file.isFileReadOnly)
 
