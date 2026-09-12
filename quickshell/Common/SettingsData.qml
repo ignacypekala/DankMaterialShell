@@ -1909,8 +1909,18 @@ Singleton {
         }
     }
 
+    function _getCurrentSettings() {
+        const setKeys = new Set();
+        for (const path of _settingsFilesPaths) {
+            const file = _settingsFiles.get(path);
+            for (const key in file.settings) {
+                setKeys.add(key);
+            }
+        }
+        return Store.toJson(root, setKeys);
+    }
     function getCurrentSettingsJson() {
-        return JSON.stringify(Store.toJson(root), null, 2);
+        return JSON.stringify(_getCurrentSettings(), null, 2);
     }
 
     function _resetPluginSettings() {
@@ -2001,7 +2011,7 @@ Singleton {
         settingsSaveDebounce.restart();
     }
     function _saveSettings() {
-        const settings = Store.toJson(root);
+        const settings = _getCurrentSettings();
         const splitSettings = _splitSettingsByFile(settings);
         for (const path in splitSettings) {
             const fileSettings = splitSettings[path];

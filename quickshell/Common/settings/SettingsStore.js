@@ -161,7 +161,7 @@ function parse(root, jsonObj) {
     }
 }
 
-function toJson(root) {
+function toJson(root, setKeys) {
     var SPEC = SpecModule.SPEC;
     var out = {};
     for (var k in SPEC) {
@@ -170,6 +170,7 @@ function toJson(root) {
         var value = root[k];
         if (k === "desktopWidgetInstances") value = withoutInstancePositions(value);
         if (k === "builtInPluginSettings") value = withoutSessionBackedPluginState(value);
+        if (!setKeys.has(k) && Util.isDefault(value, SPEC[k].def)) continue;
         out[k] = value;
     }
     out.configVersion = root.settingsConfigVersion;
