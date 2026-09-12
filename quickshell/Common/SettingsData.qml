@@ -3534,11 +3534,11 @@ Singleton {
                 _loading = true;
                 const hadParseFailed = hasParseFailed;
                 hasParseFailed = false;
+                const fileName = filePath?.split("/").pop();
                 try {
                     const txt = settingsFileView.text();
                     if (!txt || !txt.trim()) {
-                        hasParseFailed = true;
-                        return;
+                        throw new Error(`File ${fileName} is empty`)
                     }
                     settings = JSON.parse(txt);
                     hasLoaded = true;
@@ -3547,7 +3547,6 @@ Singleton {
                     _parseError = true;
 
                     const msg = error.message;
-                    const fileName = filePath?.split("/").pop();
                     log.error(`Failed to reload ${fileName} - file will not be overwritten. Error:`, msg);
                     Qt.callLater(() => ToastService.showError(I18n.tr("Failed to parse %1").arg(fileName), msg));
                 } finally {
